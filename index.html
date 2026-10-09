@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Modern Text-to-Speech web application powered by ElevenLabs API using vanilla HTML, CSS, and JavaScript.">
+  <title>ElevenLabs Voice Studio — Text to Speech</title>
+  
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <main class="tts-card" id="main-content">
+      <!-- Header Section -->
+      <header class="app-header">
+        <div class="header-badge">
+          <span class="pulse-dot" aria-hidden="true"></span>
+          <span>ElevenLabs Speech Engine</span>
+        </div>
+        <h1 class="app-title">Voice Studio</h1>
+        <p class="app-subtitle">Transform your text into natural, lifelike speech with real-time AI voice synthesis.</p>
+      </header>
+
+      <!-- Global Notification / Status Message (Accessible aria-live region) -->
+      <div id="status-message" class="status-message hidden" role="alert" aria-live="polite">
+        <span class="status-icon" id="status-icon" aria-hidden="true"></span>
+        <span class="status-text" id="status-text"></span>
+        <button type="button" class="status-dismiss" id="status-dismiss" aria-label="Dismiss message">&times;</button>
+      </div>
+
+      <!-- 1. API Key Section (Two States) -->
+      <section class="section-card api-key-card" aria-labelledby="api-key-heading">
+        <div class="section-header-row">
+          <h2 id="api-key-heading" class="section-title">
+            <svg class="section-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5L13 7l-1.5-1.5L10 7l-2-2-4 4a5 5 0 0 0 7.07 7.07L17 10l4-4-2-2z"/>
+              <circle cx="7.5" cy="14.5" r="1.5"/>
+            </svg>
+            Authentication
+          </h2>
+          <span id="api-status-pill" class="status-pill status-pill-unconfigured">Unconfigured</span>
+        </div>
+
+        <!-- State A: No Key Saved -->
+        <div id="api-key-state-a" class="api-state-container">
+          <label for="api-key-input" class="input-label">Enter your ElevenLabs API key</label>
+          <div class="input-action-group">
+            <div class="input-wrapper">
+              <input 
+                type="text" 
+                id="api-key-input" 
+                class="text-input" 
+                placeholder="Enter your ElevenLabs API key" 
+                autocomplete="off" 
+                spellcheck="false"
+              >
+            </div>
+            <button type="button" id="save-key-btn" class="btn btn-primary">
+              <span class="btn-spinner hidden" id="save-key-spinner" aria-hidden="true"></span>
+              <span id="save-key-text">Save Key</span>
+            </button>
+          </div>
+          <div id="api-key-error" class="field-error-message hidden" role="alert"></div>
+          <p class="field-hint">
+            <strong>Note:</strong> ElevenLabs API keys start with <code>sk_</code>. In your ElevenLabs dashboard (Profile &rarr; API Keys), click <strong>"Create API Key"</strong> or <strong>"Rotate key"</strong> to generate and copy the secret key (do not copy the Key ID).
+          </p>
+        </div>
+
+        <!-- State B: Key Saved (Locked Box) -->
+        <div id="api-key-state-b" class="api-state-container hidden">
+          <label id="locked-key-label" class="input-label">Saved ElevenLabs API Key</label>
+          
+          <div class="locked-key-outer" id="locked-key-outer" title="This key is locked for security">
+            <div 
+              id="locked-key-box" 
+              class="locked-key-box" 
+              aria-labelledby="locked-key-label"
+              tabindex="-1"
+            >
+              <span class="lock-icon" aria-hidden="true">🔒</span>
+              <span id="locked-key-value" class="locked-key-value"></span>
+            </div>
+          </div>
+
+          <div class="locked-key-actions">
+            <p class="field-hint mb-0">
+              Key is active and verified. Interactions on this key display are disabled.
+            </p>
+            <button type="button" id="remove-key-btn" class="btn btn-danger btn-sm">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Remove Key
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. Voice & Model Configuration -->
+      <section class="section-card config-grid" aria-labelledby="voice-config-heading">
+        <h2 id="voice-config-heading" class="sr-only">Voice & Model Configuration</h2>
+
+        <!-- Voice Dropdown -->
+        <div class="form-group">
+          <div class="label-with-meta">
+            <label for="voice-select" class="input-label">Voice</label>
+            <span id="voice-count-badge" class="badge-mini">Waiting for Key</span>
+          </div>
+          <div class="select-wrapper">
+            <select id="voice-select" class="custom-select" disabled>
+              <option value="" disabled selected>Save API key to load available voices...</option>
+            </select>
+          </div>
+          <div id="voice-error" class="field-error-message hidden" role="alert"></div>
+        </div>
+
+        <!-- Model Dropdown -->
+        <div class="form-group">
+          <div class="label-with-meta">
+            <label for="model-select" class="input-label">AI Model</label>
+            <span class="badge-mini badge-accent">v2 Models</span>
+          </div>
+          <div class="select-wrapper">
+            <select id="model-select" class="custom-select">
+              <option value="eleven_multilingual_v2" selected>Eleven Multilingual v2 (Default, 29+ languages incl. Hindi)</option>
+              <option value="eleven_flash_v2_5">Eleven Flash v2.5 (Ultra-low latency, Fast)</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Sliders: Stability & Similarity Boost -->
+      <section class="section-card sliders-grid" aria-labelledby="voice-settings-heading">
+        <div class="sliders-header">
+          <h2 id="voice-settings-heading" class="section-title">
+            <svg class="section-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="4" y1="21" x2="4" y2="14"></line>
+              <line x1="4" y1="10" x2="4" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12" y2="3"></line>
+              <line x1="20" y1="21" x2="20" y2="16"></line>
+              <line x1="20" y1="12" x2="20" y2="3"></line>
+              <line x1="1" y1="14" x2="7" y2="14"></line>
+              <line x1="9" y1="8" x2="15" y2="8"></line>
+              <line x1="17" y1="16" x2="23" y2="16"></line>
+            </svg>
+            Voice Fine-Tuning
+          </h2>
+        </div>
+
+        <div class="sliders-container">
+          <!-- Slider 1: Stability -->
+          <div class="slider-control">
+            <div class="slider-header">
+              <label for="stability-slider" class="input-label mb-0">Stability</label>
+              <span id="stability-value" class="slider-value-badge">0.50</span>
+            </div>
+            <input 
+              type="range" 
+              id="stability-slider" 
+              class="range-slider" 
+              min="0" 
+              max="1" 
+              step="0.01" 
+              value="0.50"
+              aria-describedby="stability-desc"
+            >
+            <div class="slider-subtext" id="stability-desc">
+              <span>0.0 Expressive</span>
+              <span>1.0 Consistent</span>
+            </div>
+          </div>
+
+          <!-- Slider 2: Similarity Boost -->
+          <div class="slider-control">
+            <div class="slider-header">
+              <label for="similarity-slider" class="input-label mb-0">Similarity Boost</label>
+              <span id="similarity-value" class="slider-value-badge">0.75</span>
+            </div>
+            <input 
+              type="range" 
+              id="similarity-slider" 
+              class="range-slider" 
+              min="0" 
+              max="1" 
+              step="0.01" 
+              value="0.75"
+              aria-describedby="similarity-desc"
+            >
+            <div class="slider-subtext" id="similarity-desc">
+              <span>0.0 Creative</span>
+              <span>1.0 High Fidelity</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Text Input Section -->
+      <section class="section-card text-input-section" aria-labelledby="text-input-heading">
+        <div class="section-header-row">
+          <label for="text-input" id="text-input-heading" class="input-label mb-0">Text to Speak</label>
+          <div class="char-counter-wrapper">
+            <span id="char-counter" class="char-counter" aria-live="polite">0 / 2,500</span>
+          </div>
+        </div>
+        <textarea 
+          id="text-input" 
+          class="text-area" 
+          rows="5" 
+          maxlength="2500" 
+          placeholder="Type or paste text to synthesize into high quality speech (supports English, Hindi, Spanish, French, German, and 24+ languages)..."
+          spellcheck="true"
+        ></textarea>
+        <div id="text-error" class="field-error-message hidden" role="alert"></div>
+      </section>
+
+      <!-- 5. Generate Button Action -->
+      <section class="action-section">
+        <button type="button" id="generate-btn" class="btn btn-generate">
+          <span class="btn-spinner hidden" id="generate-spinner" aria-hidden="true"></span>
+          <svg class="btn-icon" id="generate-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <span id="generate-btn-text">Generate Speech</span>
+        </button>
+      </section>
+
+      <!-- 6. Audio Player & Download Section -->
+      <section id="audio-output-card" class="section-card audio-output-card hidden" aria-labelledby="audio-output-heading">
+        <div class="section-header-row">
+          <h2 id="audio-output-heading" class="section-title">
+            <span class="wave-icon" aria-hidden="true">🔊</span>
+            Synthesized Audio
+          </h2>
+          <span id="audio-meta-pill" class="status-pill status-pill-success">Ready</span>
+        </div>
+
+        <div class="audio-player-wrapper">
+          <audio id="audio-player" class="audio-element" controls preload="auto"></audio>
+        </div>
+
+        <div class="audio-actions">
+          <a id="download-btn" class="btn btn-success btn-download" download="elevenlabs_speech.mp3" role="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Download MP3
+          </a>
+        </div>
+      </section>
+
+      <!-- 7. Session History Section -->
+      <section class="section-card history-section" aria-labelledby="history-heading">
+        <div class="section-header-row">
+          <h2 id="history-heading" class="section-title">
+            <svg class="section-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            Session History
+          </h2>
+          <span id="history-count" class="badge-mini">0 / 5</span>
+        </div>
+
+        <div id="history-empty" class="history-empty">
+          <p>No generations yet. Create your first speech clip above!</p>
+        </div>
+
+        <ul id="history-list" class="history-list hidden" aria-label="Recent generations in this session"></ul>
+      </section>
+      
+      <!-- Footer Info -->
+      <footer class="app-footer">
+        <p>Built with vanilla HTML, CSS & JavaScript • Powered by <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer">ElevenLabs API</a></p>
+      </footer>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
